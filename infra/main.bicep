@@ -228,12 +228,12 @@ param funcAppKind string = 'functionapp,linux'
 param funcAppSystemAssignedIdentity bool = false
 
 @description('Function App Package Url')
-param funcAppPackageUrl string = 'https://raw.githubusercontent.com/smoonlee/sandbox/refs/heads/main/latest.zip'
+param funcAppPackageUrl string = ''
 
 @description('Function App Settings Key Value Pairs')
 var funcAppSettingsKeyValuePairs = {
   APPLICATIONINSIGHTS_CONNECTION_STRING: createApplicationInsights.outputs.connectionString
-  WEBSITE_RUN_FROM_PACKAGE: funcAppPackageUrl
+  //WEBSITE_RUN_FROM_PACKAGE: funcAppPackageUrl
   WEBSITE_CONTENTAZUREFILECONNECTIONSTRING: '@Microsoft.KeyVault(VaultName=${keyvaultName};SecretName=connectionString1)'
   WEBSITE_CONTENTSHARE: funcAppName
   FUNCTIONS_EXTENSION_VERSION: '~4'
