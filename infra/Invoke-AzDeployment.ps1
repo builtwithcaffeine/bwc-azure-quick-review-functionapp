@@ -198,6 +198,6 @@ if ($deploy) {
     Write-Output `r "> Deployment [iac-$deployGuid] Started at $deployEndTime - Deployment Duration: $deploymentDuration"
 
     #
-    Write-Output "Updating API Permissions for Managed Identity..."
+    Write-Output `r "Updating API Permissions for Managed Identity..."
     Update-ApiPermissions -MSIName "id-$customerName-aqr-$environmentType-$($locationShortCodes.$location)"
 }

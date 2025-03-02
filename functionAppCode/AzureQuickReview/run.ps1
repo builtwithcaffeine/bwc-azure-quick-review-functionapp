@@ -67,8 +67,8 @@ function Invoke-DownloadAzureQuickReview {
         $azQRLatestReleaseTag = (Invoke-RestMethod -Uri $azQRLatestReleaseTagUrl).tag_name
         $azQRDownloadUrl = "https://github.com/Azure/azqr/releases/download/$azQRLatestReleaseTag/azqr-ubuntu-latest-amd64"
 
-        Invoke-WebRequest -Uri $azQRDownloadUrl -OutFile "$folderPath/azqr"
-        chmod +x "$folderPath/azqr"
+        Invoke-WebRequest -Uri $azQRDownloadUrl -OutFile "./$folderPath/azqr"
+        chmod +x "./$folderPath/azqr"
         Write-Output "Azure Quick Review downloaded successfully."
     } catch {
         Write-Error "Failed to download Azure Quick Review: $_"
@@ -93,9 +93,9 @@ function Invoke-AzureQuickReviewScan {
         Write-Output "Report: [$reportName]"
 
         # Execute Azure Quick Review
-        & "$folderPath/azqr" scan --output-name "$folderPath/$reportName"
+        & "./$folderPath/azqr" scan --output-name "./$folderPath/$reportName"
 
-        $script:azQuickReviewFilePath = (Get-ChildItem -Path $folderPath/*.xlsx | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+        $script:azQuickReviewFilePath = (Get-ChildItem -Path ./$folderPath/*.xlsx | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
         Write-Output "Azure Quick Review scan completed successfully. Report saved at $azQuickReviewFilePath."
     } catch {
         Write-Error "Azure Quick Review execution failed: $_"
