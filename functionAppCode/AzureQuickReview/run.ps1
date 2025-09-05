@@ -1,114 +1,58 @@
 <#
 .SYNOPSIS
-    This script performs an Azure Quick Review scan, generates a report, and optionally sends the report via email.
+    Automates the process of downloading, executing, and emailing an Azure Quick Review report.
 
 .DESCRIPTION
-    The script performs the following steps:
-    1. Ensures the report directory exists.
-    2. Downloads the latest Azure Quick Review tool.
-    3. Executes the Azure Quick Review scan and generates a report.
-    4. Optionally sends the generated report via email if email sending is enabled.
+    This script performs the following tasks:
+    1. Downloads the latest Azure Quick Review tool release from GitHub.
+    2. Extracts the downloaded release.
+    3. Executes the Azure Quick Review scan for a specified Azure subscription.
+    4. Generates a report file with a timestamp and organization name.
+    5. Sends the generated report via email using SMTP, with configuration provided via environment variables.
+    6. Cleans up temporary files after sending the email.
 
 .PARAMETER Timer
-    A parameter that can be used to trigger the script execution based on a timer.
-
-.PARAMETER folderName
-    The name of the directory where the Azure Quick Review tool and reports will be stored.
-
-.PARAMETER azQuickReviewFilePath
-    The file path of the generated Azure Quick Review report.
+    (Optional) Parameter for scheduling or timing purposes (not used in the script body).
 
 .FUNCTIONS
-    Test-Directory
-        Ensures the specified directory exists. If it does not exist, it creates the directory.
+    Send-ReportByEmail
+        Sends the generated Azure Quick Review report as an email attachment using SMTP.
+        Requires SMTP and email configuration to be set in environment variables.
+        Cleans up the report file after sending.
 
-    Invoke-DownloadAzureQuickReview
-        Downloads the latest release of the Azure Quick Review tool from GitHub.
+    Get-AzureQuickReview
+        Downloads and extracts the latest Azure Quick Review tool release from GitHub.
 
     Invoke-AzureQuickReviewScan
-        Executes the Azure Quick Review scan and generates a report in the specified directory.
+        Executes the Azure Quick Review scan using the downloaded tool.
+        Sets required environment variables and generates a uniquely named report file.
 
-    Send-ReportByEmail
-        Sends the generated Azure Quick Review report via email if email sending is enabled.
+.ENVIRONMENT VARIABLES
+    emailEnabled             - Enables/disables email sending (any value enables).
+    emailSMTPServer          - SMTP server address.
+    emailSMTPServerPort      - SMTP server port.
+    emailSMTPAuthUserName    - SMTP authentication username.
+    emailSMTPAuthPassword    - SMTP authentication password.
+    emailSender              - Email sender address.
+    emailRecipient           - Email recipient address.
+    AZURE_ORG_NAME           - Azure organization name (set during scan).
+    AZURE_TENANT_ID          - Azure tenant ID (set during scan).
+    managedIdentityId        - Azure managed identity client ID.
 
 .NOTES
-    - Ensure that the necessary environment variables are set for email sending.
-    - The script uses managed identity for authentication with Azure.
+    - Requires PowerShell 5.1+ and necessary Azure/AzureAD modules.
+    - Assumes the script is run in an environment with required permissions and environment variables set.
+    - The Azure subscription ID is hardcoded and should be updated as needed.
 
 #>
 
 param($Timer)
 
-# Define Report Directory
-$folderName = 'azqrReports'
-
-# Ensure directory exists
-function Test-Directory {
-    param($folderPath)
-
-    if (-Not (Test-Path -Path $folderPath -PathType Container)) {
-        try {
-            New-Item -ItemType Directory -Path $folderPath -Force | Out-Null
-            Write-Output "Directory '$folderPath' created successfully."
-        } catch {
-            Write-Error "Failed to create directory '$folderPath': $_"
-            exit 1
-        }
-    }
-}
-
-# Download Azure Quick Review
-function Invoke-DownloadAzureQuickReview {
-    param($folderPath)
-
-    Write-Output "Downloading Azure Quick Review..."
-    try {
-        $azQRLatestReleaseTagUrl = 'https://api.github.com/repos/Azure/azqr/releases/latest'
-        $azQRLatestReleaseTag = (Invoke-RestMethod -Uri $azQRLatestReleaseTagUrl).tag_name
-        $azQRDownloadUrl = "https://github.com/Azure/azqr/releases/download/$azQRLatestReleaseTag/azqr-ubuntu-latest-amd64"
-
-        Invoke-WebRequest -Uri $azQRDownloadUrl -OutFile "./$folderPath/azqr"
-        chmod +x "./$folderPath/azqr"
-        Write-Output "Azure Quick Review downloaded successfully."
-    } catch {
-        Write-Error "Failed to download Azure Quick Review: $_"
-        exit 1
-    }
-}
-
-# Execute Azure Quick Review Scan
-function Invoke-AzureQuickReviewScan {
-    param($folderPath)
-
-    Write-Output "Executing Azure Quick Review Scan..."
-    try {
-        $env:AZURE_ORG_NAME = (Get-MgOrganization).DisplayName
-        $env:AZURE_TENANT_ID = (Get-AzContext).Tenant.Id
-        $env:AZURE_CLIENT_ID = $env:managedIdentityId
-
-        # Report Naming
-        $dateTime = Get-Date -Format 'yyyy_MM_dd_HH_mm_ss'
-        $reportName = "$($dateTime)_$($env:AZURE_ORG_NAME)_azure_review"
-
-        Write-Output "Report: [$reportName]"
-
-        # Execute Azure Quick Review
-        & "./$folderPath/azqr" scan --output-name "./$folderPath/$reportName"
-
-        $script:azQuickReviewFilePath = (Get-ChildItem -Path ./$folderPath/*.xlsx | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
-        Write-Output "Azure Quick Review scan completed successfully. Report saved at $azQuickReviewFilePath."
-    } catch {
-        Write-Error "Azure Quick Review execution failed: $_"
-        exit 1
-    }
-}
-
-# Send Email with Report (if enabled)
 function Send-ReportByEmail {
     param($azQuickReviewFilePath)
 
     if ($env:emailEnabled) {
-        Write-Output "Sending the report via email..."
+        Write-Output `r "Sending the report via email..."
         try {
             # Fetch environment variables
             $smtpServer = $env:emailSMTPServer
@@ -157,15 +101,61 @@ Azure Quick Review Automation
             # Cleanup
             $emailMessage.Dispose()
             if ($attachment) { $attachment.Dispose() }
-        } catch {
+
+            #
+            # File Clean Up
+            Remove-Item -Path $fileName
+        }
+        catch {
             Write-Error "Failed to send email: $_"
             exit 1
         }
     }
 }
 
-# Main logic
-Test-Directory -folderPath $folderName
-Invoke-DownloadAzureQuickReview -folderPath $folderName
-Invoke-AzureQuickReviewScan -folderPath $folderName
-Send-ReportByEmail -azQuickReviewFilePath $azQuickReviewFilePath
+function Get-AzureQuickReview {
+
+    # Download Azure Quick Review
+    Write-Output `r "Checking for Azure Quick Review Release..."
+    $releaseName = 'azqr-linux-amd64.zip'
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/azure/azqr/releases/latest"
+    $downloadUrl = $($release.assets | Where-Object { $_.name -eq $releaseName }).browser_download_url
+
+    Write-Output "Downloading $downloadUrl"
+    Invoke-WebRequest -Method 'Get' -Uri $downloadUrl -OutFile ./$releaseName
+
+    Write-Output "Extracting $releaseName"
+    Expand-Archive -Path ./$releaseName -DestinationPath . -Force
+
+    # Clean Up
+    Remove-Item -Path ./$releaseName
+}
+
+function Invoke-AzureQuickReviewScan {
+    #
+    # Execute Azure Quick Review
+    $env:AZURE_TOKEN_CREDENTIALS = 'prod'
+    $env:AZURE_ORG_NAME = (Get-MgOrganization).DisplayName
+    $env:AZURE_TENANT_ID = (Get-AzContext).Tenant.Id
+    $env:AZURE_CLIENT_ID = $env:managedIdentityId
+
+    # Report Naming
+    $dateTime = Get-Date -Format 'yyyy_MM_dd_HH_mm_ss'
+    $Script:reportName = "$($dateTime)_$($env:AZURE_ORG_NAME)_Azure_Review"
+
+    Write-Output `r "Starting Azure Quick Review Report..."
+    & "./bin/linux_amd64/azqr" scan --subscription-id b67e1026-b589-41e2-b41f-73f8803f71a0 --xslx --output-name ./$reportName 2>&1
+}
+
+#
+# Get Azure Quick Review
+Get-AzureQuickReview
+
+#
+# Invoke Azure Quick Review Scan
+Invoke-AzureQuickReviewScan
+
+#
+# Send Email
+$fileName = "$($reportName).xlsx"
+Send-ReportByEmail -azQuickReviewFilePath ./$fileName
