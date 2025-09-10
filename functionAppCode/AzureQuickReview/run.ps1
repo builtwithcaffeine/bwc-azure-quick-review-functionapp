@@ -144,7 +144,7 @@ function Invoke-AzureQuickReviewScan {
     $Script:reportName = "$($dateTime)_$($env:AZURE_ORG_NAME)_Azure_Review"
 
     Write-Output `r "Starting Azure Quick Review Report..."
-    & "./bin/linux_amd64/azqr" scan --subscription-id b67e1026-b589-41e2-b41f-73f8803f71a0 --xslx --output-name ./$reportName 2>&1
+    & "./bin/linux_amd64/azqr" scan --subscription-id b67e1026-b589-41e2-b41f-73f8803f71a0 --xlsx --output-name ./$reportName 2>&1
 }
 
 #
